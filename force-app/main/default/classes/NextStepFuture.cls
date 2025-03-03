@@ -29,48 +29,55 @@ public with sharing class NextStepFuture {
      */
     //[public | private ] [static] data_type method_name (input parameters) {
     //  The body of the method
-    //}
-
-    /*
-    * Question 2
-    * Update/Uncomment the template code to create a method
-    * Create a method that inserts a big deal opportunity and updates the user role name to 'CRO'
-    * Update the corresponding test class AsynchronousTest and test method nextStepFuture_testCreateDealAndUpdateRole to cover test this method
-    */
-    //Mix DML Error happens when you try to perform DML operations on setup and non-setup objects in a single transaction.
-    public static void createDealAndUpdateRole() {
-        Opportunity bigDeal = new Opportunity();
-        insertBigDeal(bigDeal);
-
-        UserRole[] roles = [SELECT Id, Name FROM UserRole WHERE Id = :UserInfo.getUserRoleId() OR Name = 'CRO' LIMIT 1];
-        updateUserRoleName(roles);
-    }
-
-    // Helper method to insert big deal
-    private static void insertBigDeal(Opportunity opp) {
-        opp.Amount = 1000000;
-        opp.Name = 'Big Deal';
-        opp.StageName = 'Closed Won'; 
-        opp.CloseDate = Date.today();
-        
-        insert opp;
-    }
-
-
-    // Helper method to update role name
-    private static void updateUserRoleName(UserRole[] roles){
-        UserRole role;
-        if (roles.isEmpty()) {
-            role = new UserRole();
-            role.portalType = 'None'; 
-            role.CaseAccessForAccountOwner = 'Edit'; 
-            // role.OpportunityAccessForAccountOwner = 'Edit'; //This may need to be uncommented depending on your orgs Organization Wide Defaults(OWD) settings. If you are receiving FIELD_INTEGRITY_EXCEPTION, field integrity exception: unknown (Opportunity access level below organization default): [unknown], uncomment this line.
-        } else {
-            role = roles[0];
+    //
+    
+    
+    @future
+    public static void updateAccOpp(List<Id> accIds, String newNextStepField) {
+        // Query and update Accounts
+        List<Account> accountsToUpdate = [SELECT Id, Next_Step__c FROM Account WHERE Id IN :accIds];
+        if (!accountsToUpdate.isEmpty()) {
+            for (Account acc : accountsToUpdate) {
+                acc.Next_Step__c = newNextStepField;
+            }
+            update accountsToUpdate;
         }
 
-        role.Name = 'CRO';
-
-        upsert role;
+        // Query and update Opportunities related to those Accounts
+        List<Opportunity> opportunitiesToUpdate = [SELECT Id, NextStep FROM Opportunity WHERE AccountId IN :accIds];
+        if (!opportunitiesToUpdate.isEmpty()) {
+            for (Opportunity opp : opportunitiesToUpdate) {
+                opp.NextStep = newNextStepField;
+            }
+            update opportunitiesToUpdate;
+        }
     }
+    public static void createDealAndUpdateRole() {
+        // Insert Big Deal Opportunity
+        Opportunity bigDeal = new Opportunity(
+            Name = 'Big Deal',
+            Amount = 1000000,
+            StageName = 'Closed Won',
+            CloseDate = Date.today()
+        );
+        insert bigDeal;
+        
+        // Call Future Method to Update User Role
+        updateUserRoleFuture(UserInfo.getUserRoleId());
+    }
+
+    @future
+    public static void updateUserRoleFuture(Id userRoleId) {
+        try {
+            UserRole[] roles = [SELECT Id, Name FROM UserRole WHERE Id = :userRoleId LIMIT 1];
+            
+            if (!roles.isEmpty()) {
+                UserRole role = roles[0];
+                role.Name = 'CRO';
+                update role;
+            }
+        } catch (Exception e) {
+            System.debug('Error in updateUserRoleFuture: ' + e.getMessage());
+        }
+    }
 }

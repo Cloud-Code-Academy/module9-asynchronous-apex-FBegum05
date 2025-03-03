@@ -17,10 +17,79 @@
  * 
  * Note: The class below contains placeholders for implementing a queueable job to update accounts and opportunities.
  */
-public with sharing class NextStepQueueable {
+     public with sharing class NextStepQueueable implements Queueable {
+    // Member variable to store the accounts
+    private Map<Id, Account> accounts;
+
+    // Constructor to accept the accounts
+    public NextStepQueueable(Map<Id, Account> accounts) {
+        this.accounts = accounts;
+    }
+
+    // Method to queue the job
+    public static void enqueueJob() {
+        // Get 10 accounts where Next Step is not null
+        List<Account> accountList = [SELECT Id, Next_Step__c FROM Account WHERE Next_Step__c != null LIMIT 10];
+
+        // Create a map of accounts
+        Map<Id, Account> accountMap = new Map<Id, Account>();
+        for (Account acc : accountList) {
+            accountMap.put(acc.Id, acc);
+        }
+
+        // If there are any accounts, queue the job using System.enqueueJob
+        if (!accountMap.isEmpty()) {
+            System.enqueueJob(new NextStepQueueable(accountMap));
+        }
+    }
+
+    // Method to execute the queueable job
+    public void execute(QueueableContext context) {
+        if (accounts == null || accounts.isEmpty()) {
+            return;
+        }
+
+        // Get the accounts from the member variable
+        List<Account> accountList = new List<Account>(accounts.values());
+
+        // Remove the Next Step from accounts
+        for (Account acc : accountList) {
+            removeNextStep(acc);
+        }
+
+        // Update the accounts
+        update accountList;
+
+        // Get the related opportunities
+        List<Opportunity> opportunities = [SELECT Id, NextStep FROM Opportunity WHERE AccountId IN :accounts.keySet()];
+
+        // Remove the Next Step from opportunities
+        for (Opportunity opp : opportunities) {
+            removeNextStep(opp);
+        }
+
+        // Update the opportunities
+        if (!opportunities.isEmpty()) {
+            update opportunities;
+        }
+
+        // Call the enqueueJob method to process more records
+        enqueueJob();
+    }
+
+    // Helper method to remove the Next Step from an opportunity
+    private static void removeNextStep(Opportunity opp) {
+        opp.NextStep = null;
+    }
+
+    // Helper method to remove the Next Step from an account
+    private static void removeNextStep(Account acc) {
+        acc.Next_Step__c = null;
+    }
+}
 
     // Member variable to store the accounts
-    private Map<Id,Account> accounts;
+    /*private Map<Id,Account> accounts;
 
     // Constructor to accept the accounts
     public NextStepQueueable(Map<Id,Account> accounts) {
@@ -56,13 +125,12 @@ public with sharing class NextStepQueueable {
 
     // Helper method to remove the Next Step
     // Overloaded method to accept an opportunity
-    private static void removeNextStep(Opportunity opp) {
-        opp.NextStep = null;
-    }
+    //private static void removeNextStep(Opportunity opp) {
+        //opp.NextStep = null;
+    //}
 
     // Helper method to remove the Next Step
     // Overloaded method to accept an account
-    private static void removeNextStep(Account acc) {
-        acc.Next_Step__c = null;
-    }
-}
+    //private static void removeNextStep(Account acc) {
+        //acc.Next_Step__c = null;
+    //}

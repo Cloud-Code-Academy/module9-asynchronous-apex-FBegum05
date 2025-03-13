@@ -52,32 +52,30 @@ public with sharing class NextStepFuture {
             update opportunitiesToUpdate;
         }
     }
-    public static void createDealAndUpdateRole() {
-        // Insert Big Deal Opportunity
+    public static void createDealAndUpdateRole(){
         Opportunity bigDeal = new Opportunity(
             Name = 'Big Deal',
             Amount = 1000000,
-            StageName = 'Closed Won',
+            Stagename = 'Closed Won',
             CloseDate = Date.today()
+        
         );
         insert bigDeal;
-        
-        // Call Future Method to Update User Role
         updateUserRoleFuture(UserInfo.getUserRoleId());
+        
     }
-
     @future
-    public static void updateUserRoleFuture(Id userRoleId) {
-        try {
-            UserRole[] roles = [SELECT Id, Name FROM UserRole WHERE Id = :userRoleId LIMIT 1];
-            
-            if (!roles.isEmpty()) {
-                UserRole role = roles[0];
-                role.Name = 'CRO';
+    public static void  updateUserRoleFuture(Id userRoleId){
+        try{
+            UserRole[] roles = [SELECT Id,Name FROM UserRole WHERE Id =:userRoleId LIMIT 1];
+            if(!roles.isEmpty()){
+                UserRole role =roles[0];
+                role.Name ='CRO';
                 update role;
             }
-        } catch (Exception e) {
-            System.debug('Error in updateUserRoleFuture: ' + e.getMessage());
-        }
-    }
+        }
+        catch(Exception e){
+            System.debug('Error in updateUserRoleFuture:' +e.getMessage());
+        }
+    }
 }

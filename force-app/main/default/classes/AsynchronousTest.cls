@@ -1,4 +1,4 @@
-/*
+ /*
  * AsynchronousTest Class Description:
  * 
  * This test class provides test methods for various asynchronous operations in Salesforce:
@@ -28,39 +28,55 @@ public with sharing class AsynchronousTest {
 
     @IsTest
     static void nextStepFuture_testUpdateAllNextStep() {
-        // Create test data
-        List<Account> testAccounts = new List<Account>();
-        for (Integer i = 0; i < 5; i++) {
-            testAccounts.add(new Account(Name = 'Test Account ' + i));
+            // Create test data
+            List<Account> testAccounts = new List<Account>();
+            for (Integer i = 0; i < 5; i++) {
+                testAccounts.add(new Account(Name = 'Test Account ' + i));
+            }
+            insert testAccounts;
+    
+            List<Opportunity> testOpps = new List<Opportunity>();
+            for (Account acc : testAccounts) {
+                testOpps.add(new Opportunity(
+                    Name = 'Test Opp for ' + acc.Name, 
+                    AccountId = acc.Id, 
+                    CloseDate = Date.today(), 
+                    StageName = 'Prospecting'
+                ));
+            }
+            insert testOpps;
+    
+            // Convert Account Ids to String
+            List<String> accIdStrings = new List<String>();
+            for (Account acc : testAccounts) {
+                accIdStrings.add(String.valueOf(acc.Id));
+            }
+    
+            // Define the new NextStep value
+            String newNextStepField = 'Meeting in the future';
+    
+            // Call the future method inside Test.startTest() and Test.stopTest()
+            Test.startTest();
+            NextStepFuture.updateAccOpp(accIdStrings, newNextStepField);
+            Test.stopTest();
+    
+            // Query the updated accounts and opportunities
+            List<Account> updatedAccounts = [SELECT Id, Next_Step__c FROM Account WHERE Id IN :testAccounts];
+            System.debug('Updated Accounts: ' + updatedAccounts);
+    
+            List<Opportunity> updatedOpps = [SELECT Id, NextStep FROM Opportunity WHERE AccountId IN :testAccounts];
+    
+            // Assert that all accounts' Next_Step__c fields are updated
+            for (Account acc : updatedAccounts) {
+                System.assertEquals(newNextStepField, acc.Next_Step__c, 'Account Next_Step__c field was not updated correctly.');
+            }
+    
+            // Assert that all opportunities' NextStep fields are updated
+            for (Opportunity opp : updatedOpps) {
+                System.assertEquals(newNextStepField, opp.NextStep, 'Opportunity NextStep field was not updated correctly.');
+            }
         }
-        insert testAccounts;
-
-        List<Opportunity> testOpps = new List<Opportunity>();
-        for (Account acc : testAccounts) {
-            testOpps.add(new Opportunity(Name = 'Test Opp for ' + acc.Name, AccountId = acc.Id, CloseDate = Date.today(), StageName = 'Prospecting'));
-        }
-        insert testOpps;
-
-        // Call the method to test between the startTest and stopTest methods
-        Test.startTest();
-        //YOUR CODE HERE
-        Test.stopTest();
-
-        // Query the updated accounts and opportunities
-        List<Account> updatedAccounts = [SELECT Id, Next_Step__c FROM Account WHERE Id IN :testAccounts];
-        List<Opportunity> updatedOpps = [SELECT Id, NextStep FROM Opportunity WHERE Id IN :testOpps];
-
-        // Assert that all account's Next_Step__c fields are updated
-        for (Account acc : updatedAccounts) {
-            System.assertEquals('Meeting in the future', acc.Next_Step__c, 'Account Next_Step__c field was not updated correctly.');
-        }
-
-        // Assert that all opportunity's NextStep fields are updated
-        for (Opportunity opp : updatedOpps) {
-            System.assertEquals('Meeting in the future', opp.NextStep, 'Opportunity NextStep field was not updated correctly.');
-        }
-    }
-
+    
     @IsTest
     static void nextStepFuture_testCreateDealAndUpdateRole() {        
         Test.startTest();
@@ -148,7 +164,7 @@ public with sharing class AsynchronousTest {
         }
     }
 
-    /*  //UNCOMMENT TEST METHODS BELOW ONCE THE NextStepSchedule class is implemented
+      //UNCOMMENT TEST METHODS BELOW ONCE THE NextStepSchedule class is implemented
         //No Changes should be required to the test methods/code below other than uncommenting them
         //Manually setup the scheduled job in Salesforce to run the NextStepSchedule class
     @IsTest
@@ -189,5 +205,4 @@ public with sharing class AsynchronousTest {
             System.assertEquals('Batching the next meetings together.', opp.NextStep, 'Opportunity NextStep field was not updated correctly.');
         }
     }
-    */
 }

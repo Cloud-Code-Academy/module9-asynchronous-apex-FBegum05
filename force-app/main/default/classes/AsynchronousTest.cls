@@ -1,4 +1,4 @@
-/*
+ /*
  * AsynchronousTest Class Description:
  * 
  * This test class provides test methods for various asynchronous operations in Salesforce:
@@ -23,139 +23,114 @@
  * 
  * NOTE: To run the test for nextStepSchedule_testExecute, students will need to uncomment this test method after implementing the NextStepSchedule class.
  */
- @isTest
-public class AsynchronousTest {
-    
-    @testSetup
-    static void setupTestData() {
-        // Create a Test Account
-        Account testAccount = new Account(Name = 'Test Account');
-        insert testAccount;
-        
-        // Create a Test Opportunity related to the Account
-        Opportunity testOpportunity = new Opportunity(
-            Name = 'Test Opportunity',
-            StageName = 'Prospecting',
-            CloseDate = Date.today().addDays(30),
-            AccountId = testAccount.Id
-        );
-        insert testOpportunity;
-    }
+@IsTest
+public with sharing class AsynchronousTest {
 
-    @isTest
+    @IsTest
     static void nextStepFuture_testUpdateAllNextStep() {
-        // Fetch test Account ID
-        Account testAcc = [SELECT Id FROM Account LIMIT 1];
-
-        // Define new Next Step value
-        String newNextStepValue = 'Meeting in the future';
-
-        // Ensure the future method executes in test context
-        Test.startTest();
-        NextStepFuture.updateAccOpp(new List<Id>{testAcc.Id}, newNextStepValue);
-        Test.stopTest(); // Ensures the @future method execution completes
-
-        // Query the updated Account
-        Account updatedAcc = [SELECT Next_Step__c FROM Account WHERE Id = :testAcc.Id];
-
-        // Validate that the field is updated
-        System.assertEquals(newNextStepValue, updatedAcc.Next_Step__c, 
-            'Account Next_Step__c field was not updated correctly.');
-
-        // Query the updated Opportunity
-        Opportunity updatedOpp = [SELECT NextStep FROM Opportunity WHERE AccountId = :testAcc.Id];
-
-        // Validate that the field is updated
-        System.assertEquals(newNextStepValue, updatedOpp.NextStep, 
-            'Opportunity NextStep field was not updated correctly.');
-    }
-
-   @IsTest
-            static void testCreateDealAndUpdateRole() {
-            // Create a User with a role
-            Profile p = [SELECT Id FROM Profile WHERE Name='Standard User' LIMIT 1];
-            UserRole role = [SELECT Id FROM UserRole LIMIT 1];
-        
-            User testUser = new User(
-                FirstName = 'Test',
-                LastName = 'User',
-                Email = 'testuser@example.com',
-                Username = 'testuser@example.com' + System.currentTimeMillis(),
-                Alias = 'tuser',
-                TimeZoneSidKey = 'America/Los_Angeles',
-                LocaleSidKey = 'en_US',
-                EmailEncodingKey = 'UTF-8',
-                ProfileId = p.Id,
-                LanguageLocaleKey = 'en_US',
-                UserRoleId = role.Id
-            );
-        
-            System.runAs(testUser) {
-                Test.startTest();
-                NextStepFuture.createDealAndUpdateRole();
-                Test.stopTest();
-                
-                UserRole updatedRole = [SELECT Id, Name FROM UserRole WHERE Id = :testUser.UserRoleId LIMIT 1];
-                System.assertNotEquals(null, updatedRole, 'UserRole should exist.');
+            // Create test data
+            List<Account> testAccounts = new List<Account>();
+            for (Integer i = 0; i < 5; i++) {
+                testAccounts.add(new Account(Name = 'Test Account ' + i));
+            }
+            insert testAccounts;
+    
+            List<Opportunity> testOpps = new List<Opportunity>();
+            for (Account acc : testAccounts) {
+                testOpps.add(new Opportunity(
+                    Name = 'Test Opp for ' + acc.Name, 
+                    AccountId = acc.Id, 
+                    CloseDate = Date.today(), 
+                    StageName = 'Prospecting'
+                ));
+            }
+            insert testOpps;
+    
+            // Convert Account Ids to String
+            List<String> accIdStrings = new List<String>();
+            for (Account acc : testAccounts) {
+                accIdStrings.add(String.valueOf(acc.Id));
+            }
+    
+            // Define the new NextStep value
+            String newNextStepField = 'Meeting in the future';
+    
+            // Call the future method inside Test.startTest() and Test.stopTest()
+            Test.startTest();
+            NextStepFuture.updateAccOpp(accIdStrings, newNextStepField);
+            Test.stopTest();
+    
+            // Query the updated accounts and opportunities
+            List<Account> updatedAccounts = [SELECT Id, Next_Step__c FROM Account WHERE Id IN :testAccounts];
+            System.debug('Updated Accounts: ' + updatedAccounts);
+    
+            List<Opportunity> updatedOpps = [SELECT Id, NextStep FROM Opportunity WHERE AccountId IN :testAccounts];
+    
+            // Assert that all accounts' Next_Step__c fields are updated
+            for (Account acc : updatedAccounts) {
+                System.assertEquals(newNextStepField, acc.Next_Step__c, 'Account Next_Step__c field was not updated correctly.');
+            }
+    
+            // Assert that all opportunities' NextStep fields are updated
+            for (Opportunity opp : updatedOpps) {
+                System.assertEquals(newNextStepField, opp.NextStep, 'Opportunity NextStep field was not updated correctly.');
             }
         }
+    
+    @IsTest
+    static void nextStepFuture_testCreateDealAndUpdateRole() {        
+        Test.startTest();
+        NextStepFuture.createDealAndUpdateRole();
+        Test.stopTest();
 
+        // Due to the Mixed DML error, we need to test the insertBigDeal method
+        Opportunity insertedOpportunity = [SELECT Id, Amount, Name, StageName, CloseDate FROM Opportunity WHERE Name = 'Big Deal' LIMIT 1];
+        System.assertNotEquals(null, insertedOpportunity, 'Opportunity should have been created.');
+        System.assertEquals(1000000, insertedOpportunity.Amount, 'Opportunity Amount is incorrect.');
 
-    @isTest
+        // Next, we test the updateUserRoleName method
+        UserRole[] updatedRoles = [SELECT Id, Name FROM UserRole WHERE Name = 'CRO' LIMIT 1];
+        System.assertEquals(1, updatedRoles.size(), 'UserRole should exist.');
+    }
+
+    @IsTest
     static void nextStepQueueable_testEnqueueJob() {
-        // Create test data - Accounts
+        // Create test data
         List<Account> testAccounts = new List<Account>();
         for (Integer i = 0; i < 5; i++) {
             testAccounts.add(new Account(Name = 'Test Account ' + i, Next_Step__c = 'Meeting in the future'));
         }
         insert testAccounts;
 
-        // Create test data - Opportunities
         List<Opportunity> testOpps = new List<Opportunity>();
         for (Account acc : testAccounts) {
-            testOpps.add(new Opportunity(
-                Name = 'Test Opp for ' + acc.Name, 
-                AccountId = acc.Id, 
-                CloseDate = Date.today(), 
-                StageName = 'Prospecting', 
-                NextStep = 'Meeting in the future'
-            ));
+            testOpps.add(new Opportunity(Name = 'Test Opp for ' + acc.Name, AccountId = acc.Id, CloseDate = Date.today(), StageName = 'Prospecting', NextStep = 'Meeting in the future'));
         }
         insert testOpps;
 
-        // Prepare data for Queueable job
-        Map<Id, Account> accountMap = new Map<Id, Account>();
-        for (Account acc : testAccounts) {
-            accountMap.put(acc.Id, acc);
-        }
-
-        // Start the Queueable job
+        // Call the method to test
         Test.startTest();
-        Id jobId = System.enqueueJob(new NextStepQueueable(accountMap));
+        NextStepQueueable.enqueueJob();
         Test.stopTest();
-
-        // Validate that the job was enqueued
-        System.assertNotEquals(null, jobId, 'The queueable job should have been enqueued.');
 
         // Query the updated accounts and opportunities
         List<Account> updatedAccounts = [SELECT Id, Next_Step__c FROM Account WHERE Id IN :testAccounts];
-        List<Opportunity> updatedOpps = [SELECT Id, NextStep FROM Opportunity WHERE AccountId IN :testAccounts];
+        List<Opportunity> updatedOpps = [SELECT Id, NextStep FROM Opportunity WHERE Id IN :testOpps];
 
-        // Assert that all Account records have Next_Step__c set to null
+        // Assert that all account's Next_Step__c fields are null
         for (Account acc : updatedAccounts) {
-            System.assertEquals(null, acc.Next_Step__c, 'Account Next_Step__c should be null after processing.');
+            System.assertEquals(null, acc.Next_Step__c, 'Account Next_Step__c field was updated to null.');
         }
 
-        // Assert that all Opportunity records have NextStep set to null
+        // Assert that all opportunity's NextStep fields are null
         for (Opportunity opp : updatedOpps) {
-            System.assertEquals(null, opp.NextStep, 'Opportunity NextStep should be null after processing.');
+            System.assertEquals(null, opp.NextStep, 'Opportunity NextStep field was updated to null.');
         }
     }
 
-
     @IsTest
     static void nextStepBatch_testUpdateAllNextStep() {
-         //Create test data
+        // Create test data
         List<Account> testAccounts = new List<Account>();
         for (Integer i = 0; i < 5; i++) {
             testAccounts.add(new Account(Name = 'Test Account ' + i));
@@ -168,31 +143,30 @@ public class AsynchronousTest {
         }
         insert testOpps;
 
-        //Call the batch class
+        // Call the batch class
         Test.startTest();
         NextStepBatch batchJob = new NextStepBatch();
         Id batchId = Database.executeBatch(batchJob);
         Test.stopTest();
 
-         //Query the updated accounts and opportunities
+        // Query the updated accounts and opportunities
         List<Account> updatedAccounts = [SELECT Id, Next_Step__c FROM Account WHERE Id IN :testAccounts];
         List<Opportunity> updatedOpps = [SELECT Id, NextStep FROM Opportunity WHERE Id IN :testOpps];
 
-         //Assert that all account's Next_Step__c fields are updated
+        // Assert that all account's Next_Step__c fields are updated
         for (Account acc : updatedAccounts) {
-           System.assertEquals('Batching the next meetings together.', acc.Next_Step__c, 'Account Next_Step__c field was not updated correctly.');
+            System.assertEquals('Batching the next meetings together.', acc.Next_Step__c, 'Account Next_Step__c field was not updated correctly.');
         }
 
-       // Assert that all opportunity's NextStep fields are updated
+        // Assert that all opportunity's NextStep fields are updated
         for (Opportunity opp : updatedOpps) {
             System.assertEquals('Batching the next meetings together.', opp.NextStep, 'Opportunity NextStep field was not updated correctly.');
-       }
+        }
     }
-    
 
-     //UNCOMMENT TEST METHODS BELOW ONCE THE NextStepSchedule class is implemented
-       // No Changes should be required to the test methods/code below other than uncommenting them
-       // Manually setup the scheduled job in Salesforce to run the NextStepSchedule class
+      //UNCOMMENT TEST METHODS BELOW ONCE THE NextStepSchedule class is implemented
+        //No Changes should be required to the test methods/code below other than uncommenting them
+        //Manually setup the scheduled job in Salesforce to run the NextStepSchedule class
     @IsTest
     static void nextStepSchedule_testExecute() {
         // Create test data
@@ -208,34 +182,27 @@ public class AsynchronousTest {
         }
         insert testOpps;
 
-
         // Schedule the NextStepSchedule class for execution
         Test.startTest();
-        
-        // Schedule the job
         NextStepSchedule scheduleJob = new NextStepSchedule();
-        String cron = '0 0 0 * * ?'; // Runs daily at midnight
-        System.schedule('NextStepSchedule', cron, scheduleJob);
-        
-        // Run batch immediately to simulate execution
-        Database.executeBatch(new NextStepBatch());
-
+        String year = String.valueOf(Date.today().year() + 1);
+        String cron = '0 0 0 15 3 ? ' + year; // Arbitrary cron expression for once-off execution in the future
+        System.schedule('NextStepScheduleTest', cron, scheduleJob);
+        scheduleJob.execute(null);
         Test.stopTest();
 
         // Query the updated accounts and opportunities
         List<Account> updatedAccounts = [SELECT Id, Next_Step__c FROM Account WHERE Id IN :testAccounts];
         List<Opportunity> updatedOpps = [SELECT Id, NextStep FROM Opportunity WHERE Id IN :testOpps];
 
-        // Assert that all accounts have updated Next_Step__c
+        // Assert that all account's Next_Step__c fields are updated
         for (Account acc : updatedAccounts) {
-            System.assertEquals('Batching the next meetings together.', acc.Next_Step__c, 
-                'Account Next_Step__c field was not updated correctly.');
+            System.assertEquals('Batching the next meetings together.', acc.Next_Step__c, 'Account Next_Step__c field was not updated correctly.');
         }
 
-        // Assert that all opportunities have updated NextStep field
+        // Assert that all opportunity's NextStep fields are updated
         for (Opportunity opp : updatedOpps) {
-            System.assertEquals('Batching the next meetings together.', opp.NextStep, 
-                'Opportunity NextStep field was not updated correctly.');
+            System.assertEquals('Batching the next meetings together.', opp.NextStep, 'Opportunity NextStep field was not updated correctly.');
         }
     }
 }

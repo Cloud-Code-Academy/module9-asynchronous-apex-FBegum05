@@ -35,47 +35,69 @@ public with sharing class NextStepFuture {
     @future
     public static void updateAccOpp(List<Id> accIds, String newNextStepField) {
         // Query and update Accounts
-        List<Account> accountsToUpdate = [SELECT Id, Next_Step__c FROM Account WHERE Id IN :accIds];
-        if (!accountsToUpdate.isEmpty()) {
-            for (Account acc : accountsToUpdate) {
-                acc.Next_Step__c = newNextStepField;
+        try {
+            if (!accIds.isEmpty()) {
+                // Update Accounts
+                List<Account> accountsToUpdate = [SELECT Id, Next_Step__c FROM Account WHERE Id IN :accIds];
+                for (Account acc : accountsToUpdate) {
+                    acc.Next_Step__c = newNextStepField;
+                }
+                if (!accountsToUpdate.isEmpty()) {
+                    update accountsToUpdate;
+                }
+    
+                // Update Opportunities
+                List<Opportunity> opportunitiesToUpdate = [SELECT Id, NextStep FROM Opportunity WHERE AccountId IN :accIds];
+                for (Opportunity opp : opportunitiesToUpdate) {
+                    opp.NextStep = newNextStepField;
+                }
+                if (!opportunitiesToUpdate.isEmpty()) {
+                    update opportunitiesToUpdate;
+                }
             }
-            update accountsToUpdate;
+        } catch (Exception e) {
+            System.debug('Error updating records: ' + e.getMessage());
         }
+    }
+    
+     //Mix DML Error happens when you try to perform DML operations on setup and non-setup objects in a single transaction.
+public static void createDealAndUpdateRole() {
+    Opportunity bigDeal = new Opportunity();
+    insertBigDeal(bigDeal);
+    updateRole();
+}
 
-        // Query and update Opportunities related to those Accounts
-        List<Opportunity> opportunitiesToUpdate = [SELECT Id, NextStep FROM Opportunity WHERE AccountId IN :accIds];
-        if (!opportunitiesToUpdate.isEmpty()) {
-            for (Opportunity opp : opportunitiesToUpdate) {
-                opp.NextStep = newNextStepField;
-            }
-            update opportunitiesToUpdate;
-        }
+// Helper method to insert big deal
+private static void insertBigDeal(Opportunity opp) {
+    opp.Amount = 1000000;
+    opp.Name = 'Big Deal';
+    opp.StageName = 'Closed Won'; 
+    opp.CloseDate = Date.today();
+    
+    insert opp;
+}
+
+// Helper method to update role name
+private static void updateUserRoleName(UserRole[] roles){
+    UserRole role;
+    if (roles.isEmpty()) {
+        role = new UserRole();
+        role.portalType = 'None'; 
+        role.CaseAccessForAccountOwner = 'Edit'; 
+        // role.OpportunityAccessForAccountOwner = 'Edit'; //This may need to be uncommented depending on your orgs Organization Wide Defaults(OWD) settings. If you are receiving FIELD_INTEGRITY_EXCEPTION, field integrity exception: unknown (Opportunity access level below organization default): [unknown], uncomment this line.
+    } else {
+        role = roles[0];
     }
-    public static void createDealAndUpdateRole(){
-        Opportunity bigDeal = new Opportunity(
-            Name = 'Big Deal',
-            Amount = 1000000,
-            Stagename = 'Closed Won',
-            CloseDate = Date.today()
-        
-        );
-        insert bigDeal;
-        updateUserRoleFuture(UserInfo.getUserRoleId());
-        
-    }
-    @future
-    public static void  updateUserRoleFuture(Id userRoleId){
-        try{
-            UserRole[] roles = [SELECT Id,Name FROM UserRole WHERE Id =:userRoleId LIMIT 1];
-            if(!roles.isEmpty()){
-                UserRole role =roles[0];
-                role.Name ='CRO';
-                update role;
-            }
-        }
-        catch(Exception e){
-            System.debug('Error in updateUserRoleFuture:' +e.getMessage());
-        }
+
+    role.Name = 'CRO';
+}
+
+@future
+public static void updateRole() {
+    UserRole role = new UserRole();
+        role.portalType = 'None'; 
+        role.CaseAccessForAccountOwner = 'Edit'; 
+        role.Name = 'CRO';
+        insert role;
     }
 }
